@@ -6,6 +6,17 @@ Built with Electron + React + Vite. Runs on Windows and macOS.
 
 ---
 
+## Planned Features
+
+1st release is a super-alpha proof of concept at this stage. Intending to add:
+
+- **Location picker** with automatically pulled ATC / live tracking site links for the selected area
+- **More / better GUI layouts**
+- **Preview alarm button** — test your alert sound without waiting for a real emergency
+- **Customisable alert sounds and notifications**
+
+---
+
 ## Features
 
 - **Electron + React + Vite scaffold** — hot reload in dev, single-command distributable builds
