@@ -35,12 +35,10 @@
       "electron/**/*"
     ],
     "mac": {
-      "category": "public.app-category.utilities",
-      "icon": "src/assets/icon.icns"
+      "category": "public.app-category.utilities"
     },
     "win": {
-      "target": "nsis",
-      "icon": "src/assets/icon.ico"
+      "target": "nsis"
     },
     "linux": {
       "target": "AppImage"
