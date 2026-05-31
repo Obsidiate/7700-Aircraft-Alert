@@ -81,8 +81,7 @@ export default function App() {
             <RadarIcon active={activeAlerts.length > 0} />
           </div>
           <div className="logo-text">
-            <span className="logo-primary">SQUAWK</span>
-            <span className="logo-secondary">WATCH</span>
+            <span className="logo-primary">7700</span>
           </div>
         </div>
 

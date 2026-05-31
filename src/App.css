@@ -77,8 +77,8 @@
 .logo-primary {
   font-family: var(--font-display);
   font-weight: 700;
-  font-size: 16px;
-  letter-spacing: 2px;
+  font-size: 20px;
+  letter-spacing: 3px;
   color: var(--text-primary);
 }
 
