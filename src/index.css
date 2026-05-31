@@ -1,0 +1,110 @@
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg-deep:       #060912;
+  --bg-base:       #0a0e1a;
+  --bg-panel:      #0d1224;
+  --bg-elevated:   #111828;
+  --bg-hover:      #161e30;
+
+  --border:        #1e2a42;
+  --border-bright: #2a3a5c;
+
+  --text-primary:  #e8eef8;
+  --text-secondary:#8899bb;
+  --text-dim:      #445577;
+
+  --amber:         #f0a020;
+  --amber-dim:     #7a5010;
+  --amber-glow:    rgba(240,160,32,0.15);
+
+  --red:           #e03030;
+  --red-dim:       #6a1010;
+  --red-glow:      rgba(224,48,48,0.15);
+
+  --green:         #20c060;
+  --green-dim:     #0a4020;
+  --green-glow:    rgba(32,192,96,0.12);
+
+  --blue:          #3080e0;
+  --blue-glow:     rgba(48,128,224,0.12);
+
+  --cyan:          #20c0d0;
+  --cyan-dim:      #0a4048;
+
+  --squawk-7700:   #e03030;
+  --squawk-7600:   #e09020;
+  --squawk-7500:   #d020e0;
+  --squawk-7400:   #2090e0;
+
+  --font-mono:     'Share Tech Mono', monospace;
+  --font-ui:       'Barlow', sans-serif;
+  --font-display:  'Barlow Condensed', sans-serif;
+
+  --radius-sm:     3px;
+  --radius:        6px;
+  --radius-lg:     10px;
+}
+
+html, body, #root {
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  background: var(--bg-deep);
+  color: var(--text-primary);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Scrollbars */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: var(--bg-base); }
+::-webkit-scrollbar-thumb { background: var(--border-bright); border-radius: 3px; }
+
+/* Scanline overlay */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0,0,0,0.03) 2px,
+    rgba(0,0,0,0.03) 4px
+  );
+  pointer-events: none;
+  z-index: 9999;
+}
+
+/* Utility */
+.mono { font-family: var(--font-mono); }
+.dim  { color: var(--text-secondary); }
+
+/* Alert pulse animation */
+@keyframes alert-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.4; }
+}
+
+@keyframes slide-in {
+  from { transform: translateX(-8px); opacity: 0; }
+  to   { transform: translateX(0);   opacity: 1; }
+}
+
+@keyframes radar-sweep {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.animate-slide-in { animation: slide-in 0.2s ease; }
+.animate-fade-in  { animation: fade-in 0.3s ease; }
