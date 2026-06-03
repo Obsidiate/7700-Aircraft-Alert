@@ -1,4 +1,4 @@
-# 7700
+# 7700 Aircraft Alert
 
 Emergency aviation transponder squawk monitor. Polls live ADS-B data within a configurable radius and fires native desktop notifications when an aircraft squawks an emergency code.
 
@@ -6,7 +6,8 @@ Built with Electron + React + Vite. Runs on Windows and macOS.
 
 ---
 
-<img width="1280" height="906" alt="image" src="https://github.com/user-attachments/assets/fea003bb-a60e-42ae-9f58-08bc7bb4f18d" />
+<img width="2547" height="1346" alt="7700" src="https://github.com/user-attachments/assets/b2cde0f7-8050-4f94-8bcd-863ccc232eaa" />
+
 
 
 ## Planned Features
