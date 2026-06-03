@@ -8,31 +8,51 @@ Built with Electron + React + Vite. Runs on Windows and macOS.
 
 <img width="2547" height="1346" alt="7700" src="https://github.com/user-attachments/assets/b2cde0f7-8050-4f94-8bcd-863ccc232eaa" />
 
+---
 
+## Download
 
-## Planned Features
-
-1st release is a super-alpha proof of concept at this stage. Intending to add:
-
-- **Location picker** with automatically pulled ATC / live tracking site links for the selected area
-- **More / better GUI layouts**
-- **Preview alarm button** — test your alert sound without waiting for a real emergency
-- **Customisable alert sounds and notifications**
+**[7700 Aircraft Alert V1.0.0.exe](https://github.com/Obsidiate/7700/releases/latest)** — portable single file, no installation required. Settings persist between sessions.
 
 ---
 
 ## Features
 
-- **Electron + React + Vite scaffold** — hot reload in dev, single-command distributable builds
-- **ADS-B polling** — airplanes.live primary, adsb.fi automatic fallback; no API key required
-- **Emergency squawk detection** — watches for 7700 / 7600 / 7500 / 7400; fires native OS notifications (Windows toast / macOS Notification Centre) with deduplication
-- **Radar scope** — canvas-based sweep with blip fade, heading vectors, hover tooltips, click-to-select; no external dependencies
-- **Live map** — Leaflet + OSM tiles; aircraft icons rotated to heading, emergency pulsing rings, trail lines, range ring
-- **Dashboard views** — SPLIT (radar + list) / RADAR / MAP / RADAR+MAP / LIST; responsive RADAR+MAP layout via ResizeObserver
-- **Settings panel** — location (lat/lon), radius (25–250 nm), poll interval, per-code squawk filter toggles, API preference
-- **History panel** — timestamped log of every emergency detected (last 200, persisted via electron-store)
-- **Resources panel** — editable quick-links for LiveATC feeds, ACARS tools, tracking sites; squawk code reference card
-- **System tray** — runs quietly in the background; macOS hide-on-close keeps polling
+**Live monitoring**
+- ADS-B polling via airplanes.live (primary) and adsb.fi (automatic fallback) — no API key required
+- Emergency squawk detection with native OS desktop notifications + A320 Master Caution alert sound
+- Configurable poll interval (15–120 s) and radius up to 4,000 km
+
+**Dashboard views**
+- Split Both (default) — radar + map stacked left, aircraft list right
+- Split Radar, Split Map, List — additional layout options
+- Emergency response panel — on alert the list pane shows aircraft details and relevant links
+
+**Radar scope**
+- Canvas sweep with blip fade, heading vectors, hover tooltips, click-to-select
+- Zoom (+/− and mousewheel) and drag-to-pan with reset
+- Customisable accent colour for sweep, rings, and non-emergency aircraft
+
+**Live map**
+- Leaflet + OSM tiles; dark, standard, and topo layer options
+- Aircraft icons rotated to heading, emergency pulsing rings, trail lines, range ring
+
+**Settings**
+- Address autocomplete via OpenStreetMap — search by city or airport
+- Radius in nautical miles, kilometres, or miles (up to 4,000 km)
+- Per-code squawk filter toggles, API preference, accent colour picker
+
+**Alerts**
+- Simulate Alert button — test the full alert stack without a real emergency
+- Alert history — last 200 events, persisted; simulated alerts tagged SIM
+
+**Resources**
+- Suggested links auto-populated from your location (tracking, LiveATC, investigation tools)
+- Editable quick-links panel + squawk code reference card
+
+**Other**
+- Version banner — notified on launch if a new GitHub release is available
+- System tray — runs quietly in background
 
 ---
 
@@ -53,50 +73,20 @@ Requires Node.js 18+.
 
 ```bash
 npm install
-npm run dev       # Vite dev server + Electron, hot reload
-npm run dist      # Build distributable (.exe on Windows, .dmg on macOS)
-```
-
----
-
-## Project Structure
-
-```
-7700/
-├── electron/
-│   ├── main.js       # Main process: window, tray, IPC, notification dispatch
-│   ├── preload.js    # Secure context bridge (main ↔ renderer)
-│   └── poller.js     # ADS-B polling, haversine distance, alert deduplication
-├── src/
-│   ├── App.jsx / App.css          # Shell layout, sidebar nav, flash alert banner
-│   ├── index.css                  # Design tokens, global styles, animations
-│   ├── components/
-│   │   └── RadarScope.jsx         # Canvas radar (self-contained, no deps)
-│   ├── panels/
-│   │   ├── Dashboard.jsx/.css     # Live view with mode toggle
-│   │   ├── LiveMap.jsx/.css       # Leaflet map (embedded or standalone)
-│   │   ├── History.jsx/.css       # Alert log
-│   │   ├── Settings.jsx/.css      # Config UI
-│   │   └── Resources.jsx/.css     # Editable links + squawk reference
-│   └── services/
-│       └── bridge.js              # IPC abstraction (Electron ↔ web fallback)
-├── index.html        # Leaflet CSS loaded here via CDN (must not be a JS import)
-├── vite.config.js
-└── package.json
+npm run dev    # Vite dev server + Electron, hot reload
+npm run dist   # Build portable EXE
 ```
 
 ---
 
 ## Data Sources
 
-Both are free, no API key required.
+Both free, no API key required.
 
 | API | Endpoint |
 |---|---|
 | airplanes.live (primary) | `https://api.airplanes.live/v2/point/{lat}/{lon}/{radius}` |
 | adsb.fi (fallback) | `https://opendata.adsb.fi/api/v2/lat/{lat}/lon/{lon}/dist/{dist}` |
-
-Both return ADSBexchange v2 compatible JSON (`{ ac: [ ...aircraft ] }`). Failover is automatic on non-200 or timeout.
 
 ---
 
