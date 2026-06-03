@@ -46,7 +46,10 @@ function HistoryRow({ alert }) {
         {alert.squawk}
       </div>
       <div className="history-meta">
-        <div className="history-label" style={{ color: meta.color }}>{meta.label || 'ALERT'}</div>
+        <div className="history-label" style={{ color: meta.color }}>
+          {meta.label || 'ALERT'}
+          {alert._simulated && <span className="sim-tag">SIM</span>}
+        </div>
         <div className="history-id mono">{alert.flight?.trim() || alert.hex?.toUpperCase()}</div>
       </div>
       <div className="history-details dim mono">

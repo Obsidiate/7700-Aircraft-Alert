@@ -270,6 +270,33 @@
 
 @keyframes spin { to { transform: rotate(360deg); } }
 
+/* ── Poll waiting overlay ── */
+.map-poll-wait {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 18px;
+  background: rgba(6,9,18,0.88);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: 12px;
+  color: var(--text-dim);
+  pointer-events: none;
+}
+
+.poll-wait-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--green);
+  animation: alert-pulse 1.5s ease infinite;
+}
+
 /* ── Selected aircraft overlay ── */
 .selected-overlay {
   position: absolute;

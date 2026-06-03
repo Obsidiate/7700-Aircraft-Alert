@@ -70,6 +70,27 @@ export const bridge = {
   removeAllListeners(channel) {
     if (isElectron) window.app7700.removeAllListeners(channel)
   },
+
+  async getAppVersion() {
+    if (isElectron) return window.app7700.getAppVersion()
+    return '0.0.0'
+  },
+
+  async simulateAlert(ac) {
+    if (isElectron) return window.app7700.simulateAlert(ac)
+    return { ok: true }
+  },
+
+  async overpassQuery(query) {
+    if (isElectron) return window.app7700.overpassQuery(query)
+    // Web fallback — direct fetch (works in browser dev, blocked in packaged Electron)
+    const res = await fetch('https://overpass.kumi.systems/api/interpreter', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: `data=${encodeURIComponent(query)}`,
+    })
+    return res.json()
+  },
 }
 
 export const SQUAWK_META = {

@@ -1,20 +1,31 @@
-import { useState, useEffect, useCallback } from 'react'
-import { Radio, Clock, Settings, BookOpen, AlertTriangle, Map } from 'lucide-react'
+import { useState, useEffect, useCallback, useRef } from 'react'
+import { Radio, Clock, Settings, BookOpen, AlertTriangle } from 'lucide-react'
 import Dashboard from './panels/Dashboard.jsx'
 import History from './panels/History.jsx'
 import SettingsPanel from './panels/Settings.jsx'
 import Resources from './panels/Resources.jsx'
-import LiveMap from './panels/LiveMap.jsx'
 import { bridge, SQUAWK_META } from './services/bridge.js'
+import { playAlertBeep } from './services/audio.js'
 import './App.css'
 
 const NAV = [
-  { id: 'dashboard',  label: 'LIVE',      icon: Radio },
-  { id: 'map',        label: 'MAP',       icon: Map },
-  { id: 'history',    label: 'HISTORY',   icon: Clock },
-  { id: 'resources',  label: 'RESOURCES', icon: BookOpen },
-  { id: 'settings',   label: 'SETTINGS',  icon: Settings },
+  { id: 'dashboard', label: 'LIVE',      icon: Radio },
+  { id: 'history',   label: 'HISTORY',   icon: Clock },
+  { id: 'resources', label: 'RESOURCES', icon: BookOpen },
+  { id: 'settings',  label: 'SETTINGS',  icon: Settings },
 ]
+
+const GITHUB_REPO = 'Obsidiate/7700'
+const RELEASES_URL = `https://github.com/${GITHUB_REPO}/releases`
+
+function compareSemver(a, b) {
+  const parse = v => v.replace(/^v/, '').split('.').map(Number)
+  const [aMaj, aMin, aPatch] = parse(a)
+  const [bMaj, bMin, bPatch] = parse(b)
+  if (bMaj !== aMaj) return bMaj - aMaj
+  if (bMin !== aMin) return bMin - aMin
+  return bPatch - aPatch
+}
 
 export default function App() {
   const [panel, setPanel] = useState('dashboard')
@@ -23,6 +34,10 @@ export default function App() {
   const [settings, setSettings] = useState(null)
   const [lastPoll, setLastPoll] = useState(null)
   const [flashAlert, setFlashAlert] = useState(null)
+  const [versionStatus, setVersionStatus] = useState(null) // null | 'current' | 'outdated'
+  const [latestVersion, setLatestVersion] = useState(null)
+  const [emergencyAircraft, setEmergencyAircraft] = useState(null)
+  const flashTimerRef = useRef(null)
 
   useEffect(() => {
     bridge.getSettings().then(setSettings)
@@ -30,8 +45,9 @@ export default function App() {
 
     bridge.onNewAlert((alert) => {
       setAlerts(prev => [alert, ...prev].slice(0, 200))
-      setFlashAlert(alert)
-      setTimeout(() => setFlashAlert(null), 4000)
+      triggerFlash(alert)
+      playAlertBeep()
+      if (!alert._simulated) setEmergencyAircraft(alert)
     })
 
     bridge.onAircraftUpdate((ac) => {
@@ -39,10 +55,43 @@ export default function App() {
       setLastPoll(new Date())
     })
 
+    // Version check
+    bridge.getAppVersion().then(currentVersion => {
+      fetch(`https://api.github.com/repos/${GITHUB_REPO}/releases/latest`, {
+        headers: { 'Accept': 'application/vnd.github+json' }
+      })
+        .then(r => r.ok ? r.json() : null)
+        .then(data => {
+          if (!data?.tag_name) return
+          const latest = data.tag_name
+          setLatestVersion(latest)
+          setVersionStatus(compareSemver(currentVersion, latest) > 0 ? 'outdated' : 'current')
+        })
+        .catch(() => {})
+    })
+
     return () => {
       bridge.removeAllListeners('new-alert')
       bridge.removeAllListeners('aircraft-update')
     }
+  }, [])
+
+  function triggerFlash(alert) {
+    clearTimeout(flashTimerRef.current)
+    setFlashAlert(alert)
+    flashTimerRef.current = setTimeout(() => setFlashAlert(null), 4000)
+  }
+
+  const handleSimulateAlert = useCallback(async (ac) => {
+    if (ac === null) {
+      // Sim cancelled — clear emergency aircraft only if it was simulated
+      setEmergencyAircraft(prev => prev?._simulated ? null : prev)
+      return
+    }
+    await bridge.simulateAlert(ac)
+    triggerFlash(ac)
+    playAlertBeep()
+    setEmergencyAircraft(ac)
   }, [])
 
   const activeAlerts = aircraft.filter(ac =>
@@ -56,6 +105,24 @@ export default function App() {
 
   return (
     <div className="app-shell">
+      {/* Version banner */}
+      {versionStatus === 'outdated' && (
+        <div
+          className="version-banner version-outdated"
+          onClick={() => bridge.openExternal(RELEASES_URL)}
+          role="button"
+          tabIndex={0}
+          onKeyDown={e => e.key === 'Enter' && bridge.openExternal(RELEASES_URL)}
+        >
+          ↑ New version {latestVersion} available — click to download
+        </div>
+      )}
+      {versionStatus === 'current' && (
+        <div className="version-banner version-current">
+          ✓ Up to date
+        </div>
+      )}
+
       {/* Flash alert banner */}
       {flashAlert && (
         <div className="flash-banner animate-slide-in" style={{
@@ -116,7 +183,7 @@ export default function App() {
           {settings?.location && (
             <div className="dim" style={{ fontSize: 10, marginTop: 4, lineHeight: 1.3 }}>
               {settings.location.label}<br />
-              R: {settings.radius}nm
+              R: {formatRadiusForDisplay(settings.radius, settings.radiusUnit)}
             </div>
           )}
         </div>
@@ -124,14 +191,29 @@ export default function App() {
 
       {/* Main content */}
       <main className="main-content">
-        {panel === 'dashboard'  && <Dashboard aircraft={aircraft} alerts={alerts} settings={settings} />}
-        {panel === 'map'       && <LiveMap aircraft={aircraft} settings={settings} />}
-        {panel === 'history'    && <History alerts={alerts} onClear={() => { bridge.clearHistory(); setAlerts([]) }} />}
-        {panel === 'resources'  && <Resources />}
-        {panel === 'settings'   && settings && <SettingsPanel settings={settings} onSave={handleSaveSettings} />}
+        {panel === 'dashboard' && (
+          <Dashboard
+            aircraft={aircraft}
+            alerts={alerts}
+            settings={settings}
+            lastPoll={lastPoll}
+            onSimulateAlert={handleSimulateAlert}
+            emergencyAircraft={emergencyAircraft}
+          />
+        )}
+        {panel === 'history'   && <History alerts={alerts} onClear={() => { bridge.clearHistory(); setAlerts([]) }} />}
+        {panel === 'resources' && <Resources settings={settings} emergencyAircraft={emergencyAircraft} />}
+        {panel === 'settings'  && settings && <SettingsPanel settings={settings} onSave={handleSaveSettings} />}
       </main>
     </div>
   )
+}
+
+function formatRadiusForDisplay(radiusNm, unit) {
+  if (!unit || unit === 'nm') return `${radiusNm}nm`
+  if (unit === 'km') return `${Math.round(radiusNm * 1.852)}km`
+  if (unit === 'mi') return `${Math.round(radiusNm * 1.15078)}mi`
+  return `${radiusNm}nm`
 }
 
 function RadarIcon({ active }) {

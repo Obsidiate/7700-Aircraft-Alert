@@ -10,6 +10,8 @@ const store = new Store({
     pollInterval: 30,
     squawkFilters: ['7700', '7600', '7500', '7400'],
     preferredApi: 'airplanes.live',
+    radarColor: '#20c060',
+    radiusUnit: 'nm',
     alertHistory: [],
     resources: [
       { id: '1', label: 'LiveATC – Melbourne Approach', url: 'https://www.liveatc.net/search/?icao=YMML' },
@@ -130,9 +132,11 @@ function sendAlert(aircraft) {
 ipcMain.handle('get-settings', () => ({
   location: store.get('location'),
   radius: store.get('radius'),
+  radiusUnit: store.get('radiusUnit'),
   pollInterval: store.get('pollInterval'),
   squawkFilters: store.get('squawkFilters'),
   preferredApi: store.get('preferredApi'),
+  radarColor: store.get('radarColor'),
   resources: store.get('resources'),
 }))
 
@@ -168,6 +172,30 @@ ipcMain.handle('get-status', () => ({
   lastPoll: store.get('lastPoll'),
   activeCount: store.get('activeCount') || 0,
 }))
+
+ipcMain.handle('get-app-version', () => app.getVersion())
+
+ipcMain.handle('overpass-query', async (_, query) => {
+  const url = 'https://overpass.kumi.systems/api/interpreter'
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: `data=${encodeURIComponent(query)}`,
+      signal: AbortSignal.timeout(20000),
+    })
+    if (!res.ok) throw new Error(`HTTP ${res.status}`)
+    return await res.json()
+  } catch (err) {
+    console.error('[7700] Overpass error:', err.message)
+    return { elements: [] }
+  }
+})
+
+ipcMain.handle('simulate-alert', (_, ac) => {
+  sendAlert(ac)
+  return { ok: true }
+})
 
 app.whenReady().then(() => {
   createWindow()
