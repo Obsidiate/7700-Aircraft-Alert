@@ -40,8 +40,8 @@ const TILE_LAYERS = {
 }
 
 // SVG aircraft icon — returns an L.divIcon
-function makeAircraftIcon(heading, isEmergency, squawk, isSelected) {
-  const color = isEmergency ? (SQUAWK_META[String(squawk)]?.color || '#e03030') : '#20c060'
+function makeAircraftIcon(heading, isEmergency, squawk, isSelected, accentColor = '#20c060') {
+  const color = isEmergency ? (SQUAWK_META[String(squawk)]?.color || '#e03030') : accentColor
   const size = isEmergency ? 22 : 16
   const pulse = isEmergency ? `
     <circle cx="11" cy="11" r="14" fill="none" stroke="${color}" stroke-width="1.5" opacity="0.5">
@@ -79,16 +79,17 @@ function makeAircraftIcon(heading, isEmergency, squawk, isSelected) {
 }
 
 // Home marker icon
-function makeHomeIcon() {
+function makeHomeIcon(accentColor = '#20c060') {
+  const c = accentColor
   const svg = `
     <svg width="24" height="24" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-      <circle cx="12" cy="12" r="10" fill="none" stroke="#20c060" stroke-width="1.5" opacity="0.4"/>
-      <circle cx="12" cy="12" r="5"  fill="none" stroke="#20c060" stroke-width="1.5" opacity="0.7"/>
-      <circle cx="12" cy="12" r="2"  fill="#20c060"/>
-      <line x1="12" y1="2"  x2="12" y2="6"  stroke="#20c060" stroke-width="1.5"/>
-      <line x1="12" y1="18" x2="12" y2="22" stroke="#20c060" stroke-width="1.5"/>
-      <line x1="2"  y1="12" x2="6"  y2="12" stroke="#20c060" stroke-width="1.5"/>
-      <line x1="18" y1="12" x2="22" y2="12" stroke="#20c060" stroke-width="1.5"/>
+      <circle cx="12" cy="12" r="10" fill="none" stroke="${c}" stroke-width="1.5" opacity="0.4"/>
+      <circle cx="12" cy="12" r="5"  fill="none" stroke="${c}" stroke-width="1.5" opacity="0.7"/>
+      <circle cx="12" cy="12" r="2"  fill="${c}"/>
+      <line x1="12" y1="2"  x2="12" y2="6"  stroke="${c}" stroke-width="1.5"/>
+      <line x1="12" y1="18" x2="12" y2="22" stroke="${c}" stroke-width="1.5"/>
+      <line x1="2"  y1="12" x2="6"  y2="12" stroke="${c}" stroke-width="1.5"/>
+      <line x1="18" y1="12" x2="22" y2="12" stroke="${c}" stroke-width="1.5"/>
     </svg>`
   return L.divIcon({
     html: svg,
@@ -98,7 +99,8 @@ function makeHomeIcon() {
   })
 }
 
-export default function LiveMap({ aircraft, settings, embedded = false }) {
+export default function LiveMap({ aircraft, settings, embedded = false, lastPoll = null }) {
+  const accentColor = settings?.radarColor || '#20c060'
   const mapContainerRef = useRef(null)
   const mapRef = useRef(null)
   const markersRef = useRef(new Map())   // hex -> { marker, polyline }
@@ -181,7 +183,7 @@ export default function LiveMap({ aircraft, settings, embedded = false }) {
     const radiusM = radiusNm * 1852
 
     if (homeMarkerRef.current) homeMarkerRef.current.remove()
-    homeMarkerRef.current = L.marker([lat, lon], { icon: makeHomeIcon(), zIndexOffset: 1000 })
+    homeMarkerRef.current = L.marker([lat, lon], { icon: makeHomeIcon(accentColor), zIndexOffset: 1000 })
       .bindTooltip(`${settings.location.label}`, { permanent: false, className: 'map-tooltip' })
       .addTo(mapRef.current)
 
@@ -189,15 +191,15 @@ export default function LiveMap({ aircraft, settings, embedded = false }) {
     if (showRange) {
       rangeCircleRef.current = L.circle([lat, lon], {
         radius: radiusM,
-        color: '#20c060',
+        color: accentColor,
         weight: 1,
         opacity: 0.3,
-        fillColor: '#20c060',
+        fillColor: accentColor,
         fillOpacity: 0.03,
         dashArray: '4 6',
       }).addTo(mapRef.current)
     }
-  }, [settings, leafletReady, showRange])
+  }, [settings, leafletReady, showRange, accentColor])
 
   // Toggle range circle
   useEffect(() => {
@@ -208,15 +210,15 @@ export default function LiveMap({ aircraft, settings, embedded = false }) {
       const radiusM = (settings.radius || 150) * 1852
       rangeCircleRef.current = L.circle([lat, lon], {
         radius: radiusM,
-        color: '#20c060',
+        color: accentColor,
         weight: 1,
         opacity: 0.3,
-        fillColor: '#20c060',
+        fillColor: accentColor,
         fillOpacity: 0.03,
         dashArray: '4 6',
       }).addTo(mapRef.current)
     }
-  }, [showRange])
+  }, [showRange, accentColor])
 
   // Update aircraft markers
   useEffect(() => {
@@ -255,7 +257,7 @@ export default function LiveMap({ aircraft, settings, embedded = false }) {
         trailsRef.current.set(ac.hex, history)
       }
 
-      const icon = makeAircraftIcon(ac.track, isEmergency, ac.squawk, isSelected)
+      const icon = makeAircraftIcon(ac.track, isEmergency, ac.squawk, isSelected, accentColor)
       const popupContent = makePopupHTML(ac)
 
       if (markersRef.current.has(ac.hex)) {
@@ -268,7 +270,7 @@ export default function LiveMap({ aircraft, settings, embedded = false }) {
         if (trail) trail.remove()
         const newTrail = showTrails && history.length > 1
           ? L.polyline(history, {
-              color: isEmergency ? (SQUAWK_META[String(ac.squawk)]?.color || '#e03030') : '#20c060',
+              color: isEmergency ? (SQUAWK_META[String(ac.squawk)]?.color || '#e03030') : accentColor,
               weight: isEmergency ? 2 : 1,
               opacity: isEmergency ? 0.6 : 0.3,
               dashArray: isEmergency ? null : '3 5',
@@ -293,7 +295,7 @@ export default function LiveMap({ aircraft, settings, embedded = false }) {
 
         const trail = showTrails && history.length > 1
           ? L.polyline(history, {
-              color: isEmergency ? (SQUAWK_META[String(ac.squawk)]?.color || '#e03030') : '#20c060',
+              color: isEmergency ? (SQUAWK_META[String(ac.squawk)]?.color || '#e03030') : accentColor,
               weight: isEmergency ? 2 : 1,
               opacity: isEmergency ? 0.6 : 0.3,
               dashArray: isEmergency ? null : '3 5',
@@ -303,7 +305,7 @@ export default function LiveMap({ aircraft, settings, embedded = false }) {
         markersRef.current.set(ac.hex, { marker, trail })
       }
     }
-  }, [aircraft, selectedHex, showTrails, filterEmergency])
+  }, [aircraft, selectedHex, showTrails, filterEmergency, accentColor])
 
   // Pan to selected aircraft
   useEffect(() => {
@@ -409,6 +411,13 @@ export default function LiveMap({ aircraft, settings, embedded = false }) {
           <div className="map-loading">
             <div className="loading-ring" />
             <span className="dim mono">Loading map…</span>
+          </div>
+        )}
+
+        {!lastPoll && (
+          <div className="map-poll-wait">
+            <div className="poll-wait-dot" />
+            <span className="mono">Waiting for first poll…</span>
           </div>
         )}
 

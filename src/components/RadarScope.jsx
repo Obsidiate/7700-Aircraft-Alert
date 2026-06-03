@@ -2,6 +2,14 @@ import { useEffect, useRef, useCallback, useState } from 'react'
 
 const EMERGENCY_SQUAWKS = new Set(['7700', '7600', '7500', '7400'])
 
+function hexToRgba(hex, alpha) {
+  const h = hex.replace('#', '')
+  const r = parseInt(h.slice(0, 2), 16)
+  const g = parseInt(h.slice(2, 4), 16)
+  const b = parseInt(h.slice(4, 6), 16)
+  return `rgba(${r},${g},${b},${alpha})`
+}
+
 const SQUAWK_COLORS_HEX = {
   '7700': '#e03030',
   '7600': '#e09020',
@@ -33,17 +41,29 @@ function bearing(lat1, lon1, lat2, lon2) {
   return ((Math.atan2(y, x) * 180 / Math.PI) + 360) % 360
 }
 
+const ZOOM_STEPS = [0.1, 0.15, 0.2, 0.3, 0.4, 0.5, 0.6, 0.75, 1.0]
+
 export default function RadarScope({ aircraft, settings, onSelect, selected }) {
+  const accentColor = settings?.radarColor || '#20c060'
   const canvasRef = useRef(null)
   const sweepRef = useRef(0)
   const rafRef = useRef(null)
   const trailsRef = useRef(new Map()) // hex -> [{x,y,age}]
   const lastSweepHitRef = useRef(new Map()) // hex -> sweep angle when last lit
   const [hoveredHex, setHoveredHex] = useState(null)
-  const tooltipRef = useRef(null)
   const mouseRef = useRef({ x: 0, y: 0 })
+  const [zoomIdx, setZoomIdx] = useState(ZOOM_STEPS.length - 1) // start fully zoomed out
+  const panRef = useRef({ x: 0, y: 0 })          // pixel offset, mutated directly in drag
+  const dragRef = useRef(null)                     // { startX, startY, originPanX, originPanY } while dragging
+  const [isPanned, setIsPanned] = useState(false)  // drives reset button visibility
 
-  const radiusNm = settings?.radius || 150
+  const zoomFactor = ZOOM_STEPS[zoomIdx]
+  const settingsRadius = settings?.radius || 150
+  const radiusNm = settingsRadius * zoomFactor
+
+  const zoomIn  = useCallback(() => setZoomIdx(i => Math.max(0, i - 1)), [])
+  const zoomOut = useCallback(() => setZoomIdx(i => Math.min(ZOOM_STEPS.length - 1, i + 1)), [])
+  const resetPan = useCallback(() => { panRef.current = { x: 0, y: 0 }; setIsPanned(false) }, [])
 
   // Build positioned aircraft list
   const positioned = aircraft
@@ -65,97 +85,111 @@ export default function RadarScope({ aircraft, settings, onSelect, selected }) {
     const ctx = canvas.getContext('2d')
     const W = canvas.width
     const H = canvas.height
-    const cx = W / 2
-    const cy = H / 2
-    const scopeR = Math.min(cx, cy) - 24 // leave margin for labels
+    // Visual centre of the scope disc (fixed)
+    const dcx = W / 2
+    const dcy = H / 2
+    const scopeR = Math.min(dcx, dcy) - 24
+
+    // Effective origin = disc centre + pan offset (blips/origin shift, rings stay centred)
+    const pan = panRef.current
+    const cx = dcx + pan.x
+    const cy = dcy + pan.y
 
     ctx.clearRect(0, 0, W, H)
 
     // ── Background ───────────────────────────────────────────────────────────
-    const bgGrad = ctx.createRadialGradient(cx, cy, 0, cx, cy, scopeR)
+    const bgGrad = ctx.createRadialGradient(dcx, dcy, 0, dcx, dcy, scopeR)
     bgGrad.addColorStop(0, '#07140a')
     bgGrad.addColorStop(0.7, '#050e07')
     bgGrad.addColorStop(1, '#030808')
     ctx.beginPath()
-    ctx.arc(cx, cy, scopeR, 0, Math.PI * 2)
+    ctx.arc(dcx, dcy, scopeR, 0, Math.PI * 2)
     ctx.fillStyle = bgGrad
     ctx.fill()
 
-    // ── Range rings ──────────────────────────────────────────────────────────
+    // Clip all subsequent drawing to the scope circle
+    ctx.save()
+    ctx.beginPath()
+    ctx.arc(dcx, dcy, scopeR - 1, 0, Math.PI * 2)
+    ctx.clip()
+
+    // ── Range rings (centred on disc, not pan origin) ─────────────────────────
     const rings = 4
     ctx.setLineDash([2, 4])
     for (let i = 1; i <= rings; i++) {
       const r = (i / rings) * scopeR
       const nm = Math.round((i / rings) * radiusNm)
       ctx.beginPath()
-      ctx.arc(cx, cy, r, 0, Math.PI * 2)
-      ctx.strokeStyle = 'rgba(32,180,80,0.18)'
+      ctx.arc(dcx, dcy, r, 0, Math.PI * 2)
+      ctx.strokeStyle = hexToRgba(accentColor, 0.18)
       ctx.lineWidth = 1
       ctx.stroke()
 
-      // Ring label
-      ctx.fillStyle = 'rgba(32,180,80,0.5)'
+      // Ring label (fixed position relative to disc)
+      ctx.fillStyle = hexToRgba(accentColor, 0.5)
       ctx.font = '10px "Share Tech Mono", monospace'
       ctx.textAlign = 'left'
-      ctx.fillText(`${nm}nm`, cx + 4, cy - r + 12)
+      ctx.fillText(`${nm}nm`, dcx + 4, dcy - r + 12)
     }
     ctx.setLineDash([])
 
-    // ── Cross-hairs ───────────────────────────────────────────────────────────
-    ctx.strokeStyle = 'rgba(32,180,80,0.12)'
+    // ── Cross-hairs (follow pan origin) ──────────────────────────────────────
+    ctx.strokeStyle = hexToRgba(accentColor, 0.12)
     ctx.lineWidth = 1
     ctx.beginPath()
-    ctx.moveTo(cx, cy - scopeR); ctx.lineTo(cx, cy + scopeR)
-    ctx.moveTo(cx - scopeR, cy); ctx.lineTo(cx + scopeR, cy)
+    ctx.moveTo(cx, dcy - scopeR); ctx.lineTo(cx, dcy + scopeR)
+    ctx.moveTo(dcx - scopeR, cy); ctx.lineTo(dcx + scopeR, cy)
     ctx.stroke()
 
-    // ── Compass cardinal labels ──────────────────────────────────────────────
-    ctx.fillStyle = 'rgba(32,180,80,0.6)'
+    // ── Compass cardinal labels (fixed to disc rim) ───────────────────────────
+    ctx.fillStyle = hexToRgba(accentColor, 0.6)
     ctx.font = '11px "Share Tech Mono", monospace'
     ctx.textAlign = 'center'
     const cardinals = [['N', 0, -1], ['E', 1, 0], ['S', 0, 1], ['W', -1, 0]]
     for (const [label, dx, dy] of cardinals) {
-      ctx.fillText(label, cx + dx * (scopeR + 14), cy + dy * (scopeR + 14) + 4)
+      ctx.fillText(label, dcx + dx * (scopeR + 14), dcy + dy * (scopeR + 14) + 4)
     }
 
-    // ── Degree tick marks ────────────────────────────────────────────────────
+    // ── Degree tick marks (fixed to disc rim) ─────────────────────────────────
     for (let deg = 0; deg < 360; deg += 10) {
       const major = deg % 30 === 0
       const theta = (deg - 90) * Math.PI / 180
       const r1 = scopeR
       const r2 = scopeR - (major ? 8 : 4)
       ctx.beginPath()
-      ctx.moveTo(cx + Math.cos(theta) * r1, cy + Math.sin(theta) * r1)
-      ctx.lineTo(cx + Math.cos(theta) * r2, cy + Math.sin(theta) * r2)
-      ctx.strokeStyle = major ? 'rgba(32,180,80,0.5)' : 'rgba(32,180,80,0.2)'
+      ctx.moveTo(dcx + Math.cos(theta) * r1, dcy + Math.sin(theta) * r1)
+      ctx.lineTo(dcx + Math.cos(theta) * r2, dcy + Math.sin(theta) * r2)
+      ctx.strokeStyle = major ? hexToRgba(accentColor, 0.5) : hexToRgba(accentColor, 0.2)
       ctx.lineWidth = major ? 1.5 : 1
       ctx.stroke()
 
       if (major && deg % 90 !== 0) {
-        ctx.fillStyle = 'rgba(32,180,80,0.45)'
+        ctx.fillStyle = hexToRgba(accentColor, 0.45)
         ctx.font = '9px "Share Tech Mono", monospace'
         const lr = scopeR - 18
-        ctx.fillText(`${deg}`, cx + Math.cos(theta) * lr, cy + Math.sin(theta) * lr + 3)
+        ctx.fillText(`${deg}`, dcx + Math.cos(theta) * lr, dcy + Math.sin(theta) * lr + 3)
       }
     }
 
     // ── Scope rim ────────────────────────────────────────────────────────────
+    ctx.restore() // end clip before drawing rim so it sits on top cleanly
     ctx.beginPath()
-    ctx.arc(cx, cy, scopeR, 0, Math.PI * 2)
-    ctx.strokeStyle = 'rgba(32,180,80,0.35)'
+    ctx.arc(dcx, dcy, scopeR, 0, Math.PI * 2)
+    ctx.strokeStyle = hexToRgba(accentColor, 0.35)
     ctx.lineWidth = 1.5
     ctx.stroke()
 
-    // ── Sweep arm ────────────────────────────────────────────────────────────
+    // Re-clip for aircraft, sweep, and origin
+    ctx.save()
+    ctx.beginPath()
+    ctx.arc(dcx, dcy, scopeR - 1, 0, Math.PI * 2)
+    ctx.clip()
+
+    // ── Sweep arm (centred on pan origin) ────────────────────────────────────
     const sweep = sweepRef.current
     const sweepTheta = (sweep - 90) * Math.PI / 180
 
-    // Fade trail behind sweep (60° arc)
-    const trailGrad = ctx.createConicalGradient
-      ? null // not widely supported, use manual arc
-      : null
-
-    // Draw sweep trail as arc segments
+    // Draw sweep trail as arc segments from pan origin
     const trailArc = (60 * Math.PI) / 180
     const trailSteps = 20
     for (let i = 0; i < trailSteps; i++) {
@@ -164,9 +198,9 @@ export default function RadarScope({ aircraft, settings, onSelect, selected }) {
       const thetaEnd = sweepTheta - trailArc * (1 - frac - 1 / trailSteps)
       ctx.beginPath()
       ctx.moveTo(cx, cy)
-      ctx.arc(cx, cy, scopeR, thetaStart, thetaEnd)
+      ctx.arc(cx, cy, scopeR * 2, thetaStart, thetaEnd) // oversized arc, clip handles boundary
       ctx.closePath()
-      ctx.fillStyle = `rgba(20,160,60,${0.045 * frac})`
+      ctx.fillStyle = hexToRgba(accentColor, 0.045 * frac)
       ctx.fill()
     }
 
@@ -174,12 +208,12 @@ export default function RadarScope({ aircraft, settings, onSelect, selected }) {
     ctx.beginPath()
     ctx.moveTo(cx, cy)
     ctx.lineTo(
-      cx + Math.cos(sweepTheta) * scopeR,
-      cy + Math.sin(sweepTheta) * scopeR
+      cx + Math.cos(sweepTheta) * scopeR * 2,
+      cy + Math.sin(sweepTheta) * scopeR * 2
     )
-    ctx.strokeStyle = 'rgba(32,220,80,0.85)'
+    ctx.strokeStyle = hexToRgba(accentColor, 0.85)
     ctx.lineWidth = 1.5
-    ctx.shadowColor = '#20e050'
+    ctx.shadowColor = accentColor
     ctx.shadowBlur = 6
     ctx.stroke()
     ctx.shadowBlur = 0
@@ -191,7 +225,7 @@ export default function RadarScope({ aircraft, settings, onSelect, selected }) {
       const isEmergency = EMERGENCY_SQUAWKS.has(String(ac.squawk))
       const color = isEmergency
         ? (SQUAWK_COLORS_HEX[String(ac.squawk)] || '#e03030')
-        : '#20c060'
+        : accentColor
 
       const { x, y } = project(ac.bearing, ac.distanceNm ?? 0, radiusNm, scopeR)
       const px = cx + x
@@ -227,7 +261,7 @@ export default function RadarScope({ aircraft, settings, onSelect, selected }) {
         ctx.arc(trail.x, trail.y, 2, 0, Math.PI * 2)
         ctx.fillStyle = isEmergency
           ? color + Math.floor(trailAlpha * 255).toString(16).padStart(2, '0')
-          : `rgba(32,192,96,${trailAlpha})`
+          : hexToRgba(accentColor, trailAlpha)
         ctx.fill()
       }
 
@@ -282,7 +316,7 @@ export default function RadarScope({ aircraft, settings, onSelect, selected }) {
       if (baseAlpha > 0.3 || isEmergency || ac.hex === selected) {
         const label = (ac.flight?.trim() || ac.hex?.toUpperCase()?.slice(0, 6) || '?')
         const labelAlpha = isEmergency ? 1 : Math.max(0.35, baseAlpha)
-        ctx.fillStyle = isEmergency ? color : `rgba(32,192,96,${labelAlpha})`
+        ctx.fillStyle = isEmergency ? color : hexToRgba(accentColor, labelAlpha)
         ctx.font = isEmergency
           ? 'bold 10px "Share Tech Mono", monospace'
           : '9px "Share Tech Mono", monospace'
@@ -300,7 +334,7 @@ export default function RadarScope({ aircraft, settings, onSelect, selected }) {
 
         // Alt tag for selected
         if (ac.hex === selected && ac.alt_baro) {
-          ctx.fillStyle = 'rgba(32,192,96,0.7)'
+          ctx.fillStyle = hexToRgba(accentColor, 0.7)
           ctx.font = '8px "Share Tech Mono", monospace'
           ctx.fillText(
             `${Math.round(ac.alt_baro / 100) * 100}ft`,
@@ -310,24 +344,26 @@ export default function RadarScope({ aircraft, settings, onSelect, selected }) {
       }
     }
 
-    // ── Origin marker ────────────────────────────────────────────────────────
+    // ── Origin marker (follows pan) ──────────────────────────────────────────
     ctx.beginPath()
     ctx.arc(cx, cy, 4, 0, Math.PI * 2)
-    ctx.fillStyle = '#20c060'
-    ctx.shadowColor = '#20c060'
+    ctx.fillStyle = accentColor
+    ctx.shadowColor = accentColor
     ctx.shadowBlur = 10
     ctx.fill()
     ctx.shadowBlur = 0
 
     // Cross at origin
-    ctx.strokeStyle = '#20c06099'
+    ctx.strokeStyle = hexToRgba(accentColor, 0.6)
     ctx.lineWidth = 1
     ctx.beginPath()
     ctx.moveTo(cx - 8, cy); ctx.lineTo(cx + 8, cy)
     ctx.moveTo(cx, cy - 8); ctx.lineTo(cx, cy + 8)
     ctx.stroke()
 
-    // ── Hover tooltip ─────────────────────────────────────────────────────────
+    ctx.restore() // end second clip
+
+    // ── Hover tooltip (outside clip so it can overflow) ───────────────────────
     if (hoveredHex) {
       const hovered = acList.find(ac => ac.hex === hoveredHex)
       if (hovered) {
@@ -354,7 +390,7 @@ export default function RadarScope({ aircraft, settings, onSelect, selected }) {
         if (by + boxH > H - 4) by = H - boxH - 4
 
         ctx.fillStyle = 'rgba(6,9,18,0.92)'
-        ctx.strokeStyle = SQUAWK_COLORS_HEX[String(hovered.squawk)] || 'rgba(32,180,80,0.6)'
+        ctx.strokeStyle = SQUAWK_COLORS_HEX[String(hovered.squawk)] || hexToRgba(accentColor, 0.6)
         ctx.lineWidth = 1
         ctx.beginPath()
         ctx.roundRect(bx, by, boxW, boxH, 3)
@@ -372,15 +408,15 @@ export default function RadarScope({ aircraft, settings, onSelect, selected }) {
       }
     }
 
-    // ── Sweep stats overlay ──────────────────────────────────────────────────
-    ctx.fillStyle = 'rgba(32,180,80,0.5)'
+    // ── Sweep stats overlay (fixed to disc bottom edge) ──────────────────────
+    ctx.fillStyle = hexToRgba(accentColor, 0.5)
     ctx.font = '10px "Share Tech Mono", monospace'
     ctx.textAlign = 'left'
-    ctx.fillText(`${acList.length} A/C`, cx - scopeR + 6, cy + scopeR - 8)
+    ctx.fillText(`${acList.length} A/C`, dcx - scopeR + 6, dcy + scopeR - 8)
     ctx.textAlign = 'right'
-    ctx.fillText(`${Math.round(sweep)}°`, cx + scopeR - 6, cy + scopeR - 8)
+    ctx.fillText(`${Math.round(sweep)}°`, dcx + scopeR - 6, dcy + scopeR - 8)
 
-  }, [hoveredHex, radiusNm, selected])
+  }, [hoveredHex, radiusNm, selected, accentColor])
 
   // Animation loop
   useEffect(() => {
@@ -415,6 +451,18 @@ export default function RadarScope({ aircraft, settings, onSelect, selected }) {
   }, [])
 
   // Mouse interaction
+  const handleMouseDown = useCallback((e) => {
+    // Only drag with primary button and no hovered aircraft (avoid fighting with click-select)
+    if (e.button !== 0 || hoveredHex) return
+    dragRef.current = {
+      startX: e.clientX,
+      startY: e.clientY,
+      originX: panRef.current.x,
+      originY: panRef.current.y,
+    }
+    e.currentTarget.style.cursor = 'grabbing'
+  }, [hoveredHex])
+
   const handleMouseMove = useCallback((e) => {
     const canvas = canvasRef.current
     if (!canvas) return
@@ -423,11 +471,28 @@ export default function RadarScope({ aircraft, settings, onSelect, selected }) {
     const my = e.clientY - rect.top
     mouseRef.current = { x: mx, y: my }
 
+    // Handle drag pan
+    if (dragRef.current) {
+      const dx = e.clientX - dragRef.current.startX
+      const dy = e.clientY - dragRef.current.startY
+      const scopeR = Math.min(rect.width, rect.height) / 2 - 24
+      // Clamp so origin stays within the scope disc
+      const newX = Math.max(-scopeR * 0.9, Math.min(scopeR * 0.9, dragRef.current.originX + dx))
+      const newY = Math.max(-scopeR * 0.9, Math.min(scopeR * 0.9, dragRef.current.originY + dy))
+      panRef.current = { x: newX, y: newY }
+      const panned = Math.abs(newX) > 1 || Math.abs(newY) > 1
+      setIsPanned(panned)
+      return
+    }
+
+    // Hover hit-test: use panned centre
     const W = rect.width
     const H = rect.height
-    const cx = W / 2
-    const cy = H / 2
-    const scopeR = Math.min(cx, cy) - 24
+    const dcx = W / 2
+    const dcy = H / 2
+    const scopeR = Math.min(dcx, dcy) - 24
+    const cx = dcx + panRef.current.x
+    const cy = dcy + panRef.current.y
 
     let hit = null
     let minDist = 16
@@ -442,24 +507,81 @@ export default function RadarScope({ aircraft, settings, onSelect, selected }) {
     }
 
     setHoveredHex(hit)
-    canvas.style.cursor = hit ? 'pointer' : 'default'
+    canvas.style.cursor = hit ? 'pointer' : 'grab'
   }, [radiusNm])
+
+  const handleMouseUp = useCallback((e) => {
+    if (!dragRef.current) return
+    dragRef.current = null
+    const canvas = canvasRef.current
+    if (canvas) canvas.style.cursor = hoveredHex ? 'pointer' : 'grab'
+  }, [hoveredHex])
 
   const handleClick = useCallback((e) => {
     if (hoveredHex) onSelect?.(hoveredHex)
   }, [hoveredHex, onSelect])
 
   const handleMouseLeave = useCallback(() => {
+    dragRef.current = null
     setHoveredHex(null)
   }, [])
 
+  const handleWheel = useCallback((e) => {
+    e.preventDefault()
+    if (e.deltaY < 0) zoomIn()
+    else zoomOut()
+  }, [zoomIn, zoomOut])
+
+  // Attach wheel listener with { passive: false } so preventDefault works
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    canvas.addEventListener('wheel', handleWheel, { passive: false })
+    return () => canvas.removeEventListener('wheel', handleWheel)
+  }, [handleWheel])
+
+  const isZoomedIn = zoomIdx < ZOOM_STEPS.length - 1
+
   return (
-    <canvas
-      ref={canvasRef}
-      style={{ width: '100%', height: '100%', display: 'block' }}
-      onMouseMove={handleMouseMove}
-      onMouseLeave={handleMouseLeave}
-      onClick={handleClick}
-    />
+    <div style={{ position: 'relative', width: '100%', height: '100%' }}>
+      <canvas
+        ref={canvasRef}
+        style={{ width: '100%', height: '100%', display: 'block', cursor: 'grab' }}
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        onMouseLeave={handleMouseLeave}
+        onClick={handleClick}
+      />
+      <div className="radar-zoom-controls">
+        <button
+          className="radar-zoom-btn"
+          onClick={zoomIn}
+          disabled={zoomIdx === 0}
+          title="Zoom in"
+          style={{ color: accentColor, borderColor: accentColor + '55' }}
+        >+</button>
+        {isZoomedIn && (
+          <span className="radar-zoom-label mono" style={{ color: accentColor }}>
+            {Math.round(radiusNm)}nm
+          </span>
+        )}
+        <button
+          className="radar-zoom-btn"
+          onClick={zoomOut}
+          disabled={zoomIdx === ZOOM_STEPS.length - 1}
+          title="Zoom out"
+          style={{ color: accentColor, borderColor: accentColor + '55' }}
+        >−</button>
+        {isPanned && (
+          <button
+            className="radar-zoom-btn radar-reset-btn"
+            onClick={resetPan}
+            title="Reset pan to home"
+            style={{ color: accentColor, borderColor: accentColor + '55' }}
+          >⌖</button>
+        )}
+      </div>
+    </div>
   )
 }
