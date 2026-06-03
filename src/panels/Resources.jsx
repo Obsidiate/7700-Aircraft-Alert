@@ -1,14 +1,38 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { ExternalLink, Plus, Trash2, GripVertical, Save } from 'lucide-react'
 import { bridge } from '../services/bridge.js'
+import { buildSuggestedGroups } from '../services/overpass.js'
 import './Resources.css'
 
-export default function Resources() {
+function useSuggestedLinks(settings, emergencyAircraft) {
+  const [suggestions, setSuggestions] = useState(null)
+  const keyRef = useRef(null)
+
+  useEffect(() => {
+    if (!settings?.location) return
+    const { lat, lon } = settings.location
+    const acLat = emergencyAircraft?.lat ?? null
+    const acLon = emergencyAircraft?.lon ?? null
+    const key = `${lat},${lon},${settings.radius},${acLat},${acLon}`
+    if (key === keyRef.current) return
+    keyRef.current = key
+
+    const radiusM = (settings.radius || 150) * 1852
+    buildSuggestedGroups(lat, lon, settings.location.label, radiusM, acLat, acLon)
+      .then(setSuggestions)
+      .catch(() => setSuggestions([]))
+  }, [settings?.location?.lat, settings?.location?.lon, settings?.radius, emergencyAircraft?.lat, emergencyAircraft?.lon])
+
+  return { suggestions }
+}
+
+export default function Resources({ settings, emergencyAircraft }) {
   const [resources, setResources] = useState([])
   const [editing, setEditing] = useState(false)
   const [saved, setSaved] = useState(false)
   const [newLabel, setNewLabel] = useState('')
   const [newUrl, setNewUrl] = useState('')
+  const { suggestions } = useSuggestedLinks(settings, emergencyAircraft)
 
   useEffect(() => {
     bridge.getResources().then(setResources)
@@ -16,8 +40,7 @@ export default function Resources() {
 
   const addResource = () => {
     if (!newLabel.trim() || !newUrl.trim()) return
-    const entry = { id: String(Date.now()), label: newLabel.trim(), url: newUrl.trim() }
-    setResources(r => [...r, entry])
+    setResources(r => [...r, { id: String(Date.now()), label: newLabel.trim(), url: newUrl.trim() }])
     setNewLabel('')
     setNewUrl('')
   }
@@ -52,7 +75,18 @@ export default function Resources() {
       </div>
 
       <div className="resources-body">
-        {/* Categories */}
+        {/* Suggested for your area */}
+        <div className="suggested-section">
+          <div className="section-title">SUGGESTED LINKS</div>
+          {!settings?.location && (
+            <p className="dim" style={{ fontSize: 12 }}>Set a location in Settings to see location-based tracking links.</p>
+          )}
+          {suggestions?.map((group, i) => (
+            <SuggestedGroup key={i} group={group} />
+          ))}
+        </div>
+
+        {/* User links */}
         <ResourceGroup title="ATC AUDIO" resources={resources.filter(r =>
           r.url.includes('liveatc') || r.label.toLowerCase().includes('atc') || r.label.toLowerCase().includes('radio')
         )} editing={editing} onRemove={removeResource} />
@@ -72,27 +106,14 @@ export default function Resources() {
           <div className="add-resource-form">
             <div className="section-title">ADD LINK</div>
             <div className="add-form-row">
-              <input
-                className="input"
-                placeholder="Label (e.g. LiveATC Melbourne)"
-                value={newLabel}
-                onChange={e => setNewLabel(e.target.value)}
-              />
-              <input
-                className="input mono"
-                placeholder="https://..."
-                value={newUrl}
-                onChange={e => setNewUrl(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && addResource()}
-              />
-              <button className="btn-add" onClick={addResource}>
-                <Plus size={16} />
-              </button>
+              <input className="input" placeholder="Label (e.g. LiveATC Melbourne)" value={newLabel} onChange={e => setNewLabel(e.target.value)} />
+              <input className="input mono" placeholder="https://..." value={newUrl} onChange={e => setNewUrl(e.target.value)} onKeyDown={e => e.key === 'Enter' && addResource()} />
+              <button className="btn-add" onClick={addResource}><Plus size={16} /></button>
             </div>
           </div>
         )}
 
-        {/* Reference info */}
+        {/* Squawk reference */}
         <div className="reference-section">
           <div className="section-title">SQUAWK CODE REFERENCE</div>
           <div className="ref-grid">
@@ -112,6 +133,30 @@ export default function Resources() {
             ))}
           </div>
         </div>
+      </div>
+    </div>
+  )
+}
+
+export function SuggestedGroup({ group }) {
+  return (
+    <div className={`suggested-group ${group.emergency ? 'suggested-emergency' : ''}`}>
+      <div className="suggested-heading">{group.heading}</div>
+      <div className="resource-list">
+        {group.links.map((link, j) => (
+          <div key={j} className="resource-row">
+            <div className="resource-info">
+              <span className="resource-label">{link.label}</span>
+              <span className="resource-url dim mono">{link.url}</span>
+            </div>
+            <div className="resource-actions">
+              <button className="btn-open" onClick={() => bridge.openExternal(link.url)}>
+                <ExternalLink size={13} />
+                Open
+              </button>
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   )

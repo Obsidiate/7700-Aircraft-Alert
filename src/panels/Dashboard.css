@@ -55,13 +55,8 @@
 .view-btn:hover  { color: var(--text-secondary); background: var(--bg-elevated); }
 .view-btn.active { color: var(--amber); background: var(--bg-elevated); }
 
-/* RADAR+MAP combo button gets a subtle highlight to signal it's special */
-.view-btn-combo { color: var(--cyan-dim); }
-.view-btn-combo:hover { color: var(--cyan); }
-.view-btn-combo.active { color: var(--cyan); border: 1px solid var(--cyan-dim); }
-
 /* ── Stats ── */
-.header-stats { display: flex; gap: 12px; flex-shrink: 0; }
+.header-stats { display: flex; gap: 8px; flex-shrink: 0; align-items: center; }
 
 .stat-box {
   text-align: right;
@@ -113,6 +108,37 @@
 .ec-id     { font-size: 14px; font-weight: 600; margin-top: 3px; }
 .ec-detail { display: flex; gap: 6px; flex-wrap: wrap; font-size: 10px; margin-top: 2px; }
 
+/* ── Simulate button ── */
+.sim-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-dim);
+  font-family: var(--font-display);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+
+.sim-btn:hover {
+  color: var(--amber);
+  border-color: var(--amber);
+}
+
+.sim-btn.sim-active {
+  color: var(--red);
+  border-color: var(--red-dim);
+  background: rgba(224,48,48,0.08);
+  animation: alert-pulse 1.5s ease infinite;
+}
+
 /* ── Dashboard body ── */
 .dashboard-body {
   flex: 1;
@@ -121,15 +147,13 @@
   min-height: 0;
 }
 
-/* Individual view layouts */
-.dashboard-body.view-radar  { flex-direction: column; }
-.dashboard-body.view-list   { flex-direction: column; }
-.dashboard-body.view-map    { flex-direction: column; }
-.dashboard-body.view-split  { flex-direction: row; }
+/* All split views are row-direction */
+.dashboard-body.view-split-radar,
+.dashboard-body.view-split-map,
+.dashboard-body.view-split-both { flex-direction: row; }
 
-/* Combo: stacked by default, side-by-side when wide */
-.dashboard-body.view-combo.combo-tall { flex-direction: column; }
-.dashboard-body.view-combo.combo-wide { flex-direction: row; }
+/* List-only fills column */
+.dashboard-body.view-list { flex-direction: column; }
 
 /* ── Radar pane ── */
 .radar-pane {
@@ -140,11 +164,7 @@
   background: var(--bg-deep);
 }
 
-/* Radar sizing per view */
-.view-split  .radar-pane { width: 52%; min-width: 320px; border-right: 1px solid var(--border); }
-.view-radar  .radar-pane { flex: 1; }
-.combo-wide  .radar-pane { flex: 1; min-width: 0; border-right: 1px solid var(--border); }
-.combo-tall  .radar-pane { flex: 1; min-height: 0; border-bottom: 1px solid var(--border); }
+.view-split-radar .radar-pane { width: 52%; min-width: 320px; border-right: 1px solid var(--border); }
 
 /* ── Map pane ── */
 .map-pane {
@@ -156,14 +176,68 @@
   flex-direction: column;
 }
 
-/* Standalone map view fills completely */
-.view-map .map-pane { flex: 1; }
+.view-split-map .map-pane { width: 52%; min-width: 320px; border-right: 1px solid var(--border); flex: none; }
 
-/* Combo stacked: map gets equal share of height */
-.combo-tall .map-pane { flex: 1; min-height: 0; }
+/* ── Dual-left column (split-both) ── */
+.dual-left {
+  width: 52%;
+  min-width: 320px;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--border);
+  overflow: hidden;
+}
 
-/* Combo wide: map gets equal share of width */
-.combo-wide .map-pane { flex: 1; min-width: 0; }
+.dual-left .radar-pane {
+  flex: 1;
+  border-right: none;
+  border-bottom: 1px solid var(--border);
+}
+
+.dual-left .map-pane {
+  flex: 1;
+}
+
+/* ── Radar zoom controls ── */
+.radar-zoom-controls {
+  position: absolute;
+  bottom: 12px;
+  right: 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  z-index: 10;
+}
+
+.radar-zoom-btn {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(6,9,18,0.82);
+  border: 1px solid;
+  border-radius: 4px;
+  font-size: 18px;
+  font-weight: 300;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.15s, opacity 0.15s;
+  backdrop-filter: blur(4px);
+}
+
+.radar-zoom-btn:hover:not(:disabled) { background: rgba(6,9,18,0.95); }
+.radar-zoom-btn:disabled { opacity: 0.25; cursor: default; }
+
+.radar-reset-btn { margin-top: 4px; font-size: 14px; }
+
+.radar-zoom-label {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  opacity: 0.75;
+}
 
 /* ── Selected aircraft bar (over radar) ── */
 .selected-bar {
@@ -203,7 +277,9 @@
   flex-direction: column;
 }
 
-.view-split .list-pane { width: 48%; }
+.view-split-radar .list-pane,
+.view-split-map   .list-pane,
+.view-split-both  .list-pane { width: 48%; }
 
 .empty-state {
   display: flex;
@@ -278,3 +354,180 @@
   flex-shrink: 0;
   animation: alert-pulse 1s ease infinite;
 }
+
+/* ── List mode toggle bar ── */
+.list-mode-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-elevated);
+  flex-shrink: 0;
+}
+
+.list-mode-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  font-family: var(--font-display);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 3px;
+  transition: color 0.15s;
+}
+.list-mode-btn:hover { color: var(--text-primary); }
+
+.list-mode-close {
+  margin-left: auto;
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  transition: color 0.15s;
+}
+.list-mode-close:hover { color: var(--text-primary); }
+
+/* ── Emergency links pane ── */
+.elp-wrap {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow-y: auto;
+}
+
+.elp-card {
+  margin: 12px;
+  padding: 12px 14px;
+  border: 1px solid;
+  border-radius: var(--radius);
+  background: var(--bg-elevated);
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-rows: auto auto;
+  column-gap: 12px;
+  row-gap: 4px;
+  animation: alert-pulse 2s ease infinite;
+}
+
+.elp-squawk {
+  grid-row: 1 / 3;
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: 3px;
+  line-height: 1;
+  align-self: center;
+}
+
+.elp-meta {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.elp-callsign {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.elp-type { font-size: 12px; }
+
+.elp-details {
+  display: flex;
+  gap: 10px;
+  font-size: 11px;
+  flex-wrap: wrap;
+}
+
+.elp-label {
+  grid-column: 1 / 3;
+  font-family: var(--font-display);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  margin-top: 4px;
+}
+
+.elp-links { display: flex; flex-direction: column; padding: 4px 0; }
+
+.elp-links-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-display);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  padding: 8px 14px 4px;
+}
+
+.elp-group {
+  display: flex;
+  flex-direction: column;
+  padding: 4px 0;
+}
+
+.elp-group-heading {
+  font-family: var(--font-display);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  color: var(--text-dim);
+  padding: 6px 14px 2px;
+}
+
+.elp-emergency .elp-group-heading { color: var(--red); }
+
+.elp-link-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 7px 14px;
+  background: none;
+  border: none;
+  border-bottom: 1px solid rgba(30,42,66,0.3);
+  color: var(--text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.1s, color 0.1s;
+  width: 100%;
+}
+
+.elp-link-row:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.elp-link-label { flex: 1; }
+
+.elp-link-icon {
+  flex-shrink: 0;
+  opacity: 0.4;
+  margin-left: 8px;
+}
+
+.elp-link-row:hover .elp-link-icon { opacity: 0.8; }
+
+.elp-traffic {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  border-top: 1px solid var(--border);
+  overflow-y: auto;
+}
+
+.spin-icon { animation: spin-slow 1.2s linear infinite; }
+@keyframes spin-slow { to { transform: rotate(360deg); } }

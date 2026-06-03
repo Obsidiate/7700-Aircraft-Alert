@@ -25,7 +25,7 @@ async function fetchAircraft(settings) {
     if (!api) continue
 
     try {
-      const url = api.byRadius(lat, lon, Math.min(radius, 250))
+      const url = api.byRadius(lat, lon, radius)
       const res = await fetch(url, {
         headers: { 'User-Agent': '7700/0.1 (emergency monitor; contact via github)' },
         signal: AbortSignal.timeout(10000),
