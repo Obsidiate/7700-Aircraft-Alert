@@ -10,6 +10,10 @@ Built with Electron + React + Vite. Runs on Windows and macOS.
 
 ---
 
+##Disclaimer: 
+
+This tool is a hobbyist/enthusiast project intended for light personal use only. It is absolutely not intended, approved, or suitable for commercial, operational, or emergency service use. It should not be considered reliable, it is in a very early active development stage, subject to breaking changes, and dependent on third-party ADS-B APIs that may be blocked, rate-limited, or discontinued at any time without notice. Do not use this tool for safety-critical decision making of any kind.
+
 ## Download
 
 **[7700 Aircraft Alert V1.0.0.exe](https://github.com/Obsidiate/7700-Aircraft-Alert/releases/latest)** — portable single file, no installation required. Settings persist between sessions.
