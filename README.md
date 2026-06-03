@@ -18,7 +18,11 @@ This tool is a hobbyist/enthusiast project intended for light personal use only.
 
 **[7700 Aircraft Alert V1.0.0.exe](https://github.com/Obsidiate/7700-Aircraft-Alert/releases/latest)** — portable single file, no installation required. Settings persist between sessions.
 
-This is still very much eary in development. Any issues or suggestions are quite welcome in the issues/discussions tabs above!
+## Development 
+
+This is still very much eary in development. 
+Suggestions are quite welcome in the discussions tabs above!
+Issues welcome in the issues tab above! 
 
 ---
 
