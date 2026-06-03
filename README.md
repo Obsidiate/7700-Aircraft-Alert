@@ -95,5 +95,6 @@ Both free, no API key required.
 ## Legal
 
 - airplanes.live: personal, non-commercial use. Contribute a feeder if you use it regularly.
-- adsb.fi: personal, non-commercial use. Cite adsb.fi and link to their homepage.
+- adsb.fi: personal, non-commercial use.
+- 
 **Disclaimer:** This tool is a hobbyist/enthusiast project intended for light personal use only. It is absolutely not intended, approved, or suitable for commercial, operational, or emergency service use. It should not be considered reliable — it is in active development, subject to breaking changes, and dependent on third-party ADS-B APIs that may be blocked, rate-limited, or discontinued at any time without notice. Do not use this tool for safety-critical decision making of any kind.
